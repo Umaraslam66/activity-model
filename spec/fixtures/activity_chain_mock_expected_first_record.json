@@ -1,0 +1,126 @@
+{
+  "schema_version": "activity_chain_v1",
+  "scenario_id": "scenario_0000000",
+  "city_archetype": "dense_transit_hub",
+  "macro_context": {
+    "transit_density_index": 0.7,
+    "active_mobility_index": 0.53,
+    "spatial_sprawl_score": 0.1
+  },
+  "persona": {
+    "age": 58,
+    "income_bracket": "high",
+    "employment_status": "unemployed",
+    "household_structure": "couple",
+    "has_children": false,
+    "car_ownership": "none",
+    "bike_ownership": false,
+    "transit_pass": false,
+    "work_schedule": "unemployed",
+    "value_of_time_multiplier": 0.5,
+    "weather_resilience": 0.56,
+    "comfort_preference": 0.55
+  },
+  "environment": {
+    "day_type": "saturday",
+    "weather": "clear",
+    "transit_disruption": "minor_delay",
+    "road_congestion": "severe",
+    "parking_cost_level": "medium",
+    "toll_level": "high",
+    "special_event": "street_festival",
+    "dynamic_cost_sek": 103.4,
+    "network_delay_mins": 5.64
+  },
+  "activities": [
+    {
+      "sequence": 0,
+      "purpose": "home",
+      "location_zone": "home_zone",
+      "start_min": 0,
+      "end_min": 540,
+      "flexibility": "low"
+    },
+    {
+      "sequence": 1,
+      "purpose": "leisure",
+      "location_zone": "park_zone",
+      "start_min": 561,
+      "end_min": 651,
+      "flexibility": "medium"
+    },
+    {
+      "sequence": 2,
+      "purpose": "shopping",
+      "location_zone": "retail_strip",
+      "start_min": 661,
+      "end_min": 706,
+      "flexibility": "medium"
+    },
+    {
+      "sequence": 3,
+      "purpose": "home",
+      "location_zone": "home_zone",
+      "start_min": 710,
+      "end_min": 1440,
+      "flexibility": "high"
+    }
+  ],
+  "legs": [
+    {
+      "sequence": 0,
+      "from_activity_sequence": 0,
+      "to_activity_sequence": 1,
+      "mode": "walk",
+      "depart_min": 540,
+      "arrive_min": 561,
+      "travel_time_min": 21,
+      "distance_km": 1.7,
+      "generalized_cost": 0.0,
+      "reason_tags": [
+        "toll",
+        "cost",
+        "habit"
+      ]
+    },
+    {
+      "sequence": 1,
+      "from_activity_sequence": 1,
+      "to_activity_sequence": 2,
+      "mode": "walk",
+      "depart_min": 651,
+      "arrive_min": 661,
+      "travel_time_min": 10,
+      "distance_km": 0.8,
+      "generalized_cost": 0.0,
+      "reason_tags": [
+        "toll",
+        "cost",
+        "habit"
+      ]
+    },
+    {
+      "sequence": 2,
+      "from_activity_sequence": 2,
+      "to_activity_sequence": 3,
+      "mode": "ridehail",
+      "depart_min": 706,
+      "arrive_min": 710,
+      "travel_time_min": 4,
+      "distance_km": 2.2,
+      "generalized_cost": 4.4,
+      "reason_tags": [
+        "toll",
+        "time",
+        "comfort"
+      ]
+    }
+  ],
+  "summary": {
+    "primary_tour_purpose": "leisure",
+    "commute_mode_if_any": "none",
+    "out_of_home_activities": 2,
+    "total_distance_km": 4.7,
+    "total_travel_time_min": 35
+  }
+}

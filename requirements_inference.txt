@@ -1,0 +1,17 @@
+# Runtime dependencies for real Qwen generation.
+#
+# This file is intentionally separate from `requirements_smoke.txt`.
+# Use it for:
+# - Docker runtime builds (CI via GitHub Actions)
+# - Apptainer / Leonardo generation jobs
+#
+# vllm ships prebuilt wheels for linux/amd64 + CUDA 12.x.
+# The CUDA runtime base image (12.4.1) provides the driver libs;
+# vllm brings its own torch + triton via pip.
+
+jsonschema>=4.22.0
+huggingface_hub>=0.25.0
+hf_transfer>=0.1.8
+transformers>=4.45.0
+accelerate>=0.34.0
+vllm>=0.8.0,<0.9.0
