@@ -5,6 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=boost_usr_prod
+#SBATCH --account=AIFAC_P02_222
 #SBATCH --qos=normal
 #SBATCH --time=04:00:00
 #SBATCH --output=%x-%j.out
