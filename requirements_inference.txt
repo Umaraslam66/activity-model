@@ -1,20 +1,9 @@
 # Runtime dependencies for real Qwen generation.
 #
-# This file is intentionally separate from `requirements_smoke.txt`.
-# Use it for:
-# - Docker runtime builds (CI via GitHub Actions)
-# - Apptainer / Leonardo generation jobs
-#
-# vllm ships prebuilt wheels for linux/amd64 + CUDA 12.x.
-# The CUDA runtime base image (12.4.1) provides the driver libs;
-# vllm brings its own torch + triton via pip.
-#
-# Pinned to latest stable versions as of 2026-03-24.
-# NOTE: vllm 0.18.0 pins transformers<5, but Qwen3.5 needs transformers>=5.2.0.
-# The Dockerfile force-upgrades transformers after vllm install.
+# vllm 0.18.0 pins transformers<5, but Qwen3.5 needs transformers>=5.2.0.
+# We let vllm resolve its deps first, then the Dockerfile force-upgrades
+# transformers and huggingface_hub after install.
 
 jsonschema==4.26.0
-huggingface_hub==1.7.2
 hf_transfer==0.1.9
-accelerate==1.13.0
 vllm==0.18.0
