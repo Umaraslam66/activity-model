@@ -1,7 +1,6 @@
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+FROM vllm/vllm-openai:v0.18.0
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HOME=/cache/huggingface \
     HUGGINGFACE_HUB_CACHE=/cache/huggingface \
@@ -11,24 +10,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     OUTPUT_ROOT=/workspace/data/container-smoke \
     TOKENIZERS_PARALLELISM=false
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      python3 \
-      python3-pip \
-      python3-venv \
-      git \
-      gcc \
-      g++ \
-      python3-dev && \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /workspace
 
 COPY requirements_inference.txt requirements_smoke.txt ./
 
-RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
-    python3 -m pip install --no-deps "transformers==5.3.0" "huggingface_hub==1.7.2" "accelerate==1.13.0"
+# vllm base image already has vllm, torch, triton, gcc, CUDA all configured.
+# Just upgrade transformers for Qwen3.5 support and install our extra deps.
+RUN pip install --no-deps "transformers==5.3.0" "huggingface_hub==1.7.2" "accelerate==1.13.0" && \
+    pip install jsonschema==4.26.0 hf_transfer==0.1.9 pytest>=8.3.0
 
 COPY . /workspace
 
