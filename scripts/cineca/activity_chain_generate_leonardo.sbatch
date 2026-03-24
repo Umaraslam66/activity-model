@@ -126,6 +126,7 @@ else
   export SINGULARITYENV_PYTHONUNBUFFERED="$PYTHONUNBUFFERED"
   export SINGULARITYENV_HF_HUB_ENABLE_HF_TRANSFER="$HF_HUB_ENABLE_HF_TRANSFER"
   export SINGULARITYENV_OMP_NUM_THREADS="$OMP_NUM_THREADS"
+  export SINGULARITYENV_CC="/usr/bin/gcc"
 fi
 
 ARGS=(
@@ -158,5 +159,7 @@ srun --ntasks=1 "$CONTAINER_RUNTIME" exec --cleanenv --nv \
   --bind "$OUTPUT_ROOT":"$OUTPUT_ROOT" \
   --bind "$HF_HOME":"$HF_HOME" \
   --bind "$VLLM_CACHE_ROOT":"$VLLM_CACHE_ROOT" \
+  --bind /usr/bin/gcc:/usr/bin/gcc \
+  --bind /usr/bin/g++:/usr/bin/g++ \
   "$CONTAINER_IMAGE" \
   "${ARGS[@]}"

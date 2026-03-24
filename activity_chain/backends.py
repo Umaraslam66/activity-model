@@ -41,6 +41,7 @@ class VllmBackend:
             dtype=dtype,
             max_model_len=max_model_len,
             tensor_parallel_size=tensor_parallel_size,
+            language_model_only=True,
         )
         self._tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=False)
         self._sampling = SamplingParams(

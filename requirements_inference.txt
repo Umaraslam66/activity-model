@@ -8,10 +8,13 @@
 # vllm ships prebuilt wheels for linux/amd64 + CUDA 12.x.
 # The CUDA runtime base image (12.4.1) provides the driver libs;
 # vllm brings its own torch + triton via pip.
+#
+# Pinned to latest stable versions as of 2026-03-24.
+# transformers >= 5.2.0 required for Qwen3.5 architecture support.
 
-jsonschema>=4.22.0
-huggingface_hub>=0.25.0
-hf_transfer>=0.1.8
-transformers>=4.45.0
-accelerate>=0.34.0
-vllm>=0.18.0
+jsonschema==4.26.0
+huggingface_hub==1.7.2
+hf_transfer==0.1.9
+transformers==5.3.0
+accelerate==1.13.0
+vllm==0.18.0
