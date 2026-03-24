@@ -10,11 +10,11 @@
 # vllm brings its own torch + triton via pip.
 #
 # Pinned to latest stable versions as of 2026-03-24.
-# transformers >= 5.2.0 required for Qwen3.5 architecture support.
+# NOTE: vllm 0.18.0 pins transformers<5, but Qwen3.5 needs transformers>=5.2.0.
+# The Dockerfile force-upgrades transformers after vllm install.
 
 jsonschema==4.26.0
 huggingface_hub==1.7.2
 hf_transfer==0.1.9
-transformers==5.3.0
 accelerate==1.13.0
 vllm==0.18.0

@@ -27,7 +27,8 @@ WORKDIR /workspace
 COPY requirements_inference.txt requirements_smoke.txt ./
 
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt
+    python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
+    python3 -m pip install --no-deps "transformers==5.3.0"
 
 COPY . /workspace
 
