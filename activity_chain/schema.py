@@ -318,7 +318,6 @@ ACTIVITY_CHAIN_JSON_SCHEMA: dict[str, Any] = {
                         "type": "array",
                         "minItems": 1,
                         "maxItems": 4,
-                        "uniqueItems": True,
                         "items": {"type": "string", "enum": REASON_TAGS},
                     },
                 },

@@ -30,6 +30,7 @@ class VllmBackend:
         tensor_parallel_size: int,
         dtype: str,
         seed: int,
+        enforce_eager: bool,
     ) -> None:
         from transformers import AutoTokenizer  # type: ignore
         from vllm import LLM, SamplingParams  # type: ignore
@@ -42,6 +43,7 @@ class VllmBackend:
             max_model_len=max_model_len,
             tensor_parallel_size=tensor_parallel_size,
             language_model_only=True,
+            enforce_eager=enforce_eager,
         )
         self._tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=False)
         self._sampling = SamplingParams(

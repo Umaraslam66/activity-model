@@ -87,6 +87,8 @@ def validate_activity_chain(
             raise ValueError(f"leg sequence mismatch at index {idx}")
         if leg["from_activity_sequence"] != idx or leg["to_activity_sequence"] != idx + 1:
             raise ValueError(f"leg {idx} must connect activity {idx} to {idx + 1}")
+        if len(leg["reason_tags"]) != len(set(leg["reason_tags"])):
+            raise ValueError(f"leg {idx} reason_tags must be unique")
 
         prev_activity = activities[idx]
         next_activity = activities[idx + 1]

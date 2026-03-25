@@ -21,6 +21,13 @@ def _default_output_path() -> str:
     return "data/activity_chain_v1.jsonl"
 
 
+def _env_flag(name: str, *, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate activity_chain_v1 synthetic data.")
     parser.add_argument("--backend", choices=["vllm", "mock"], default=os.environ.get("ABM_BACKEND", "vllm"))
@@ -35,6 +42,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--dtype", default="bfloat16")
+    parser.add_argument(
+        "--enforce-eager",
+        action="store_true",
+        default=_env_flag("ABM_VLLM_ENFORCE_EAGER", default=False),
+        help="Disable vLLM torch.compile / cudagraph path for stability.",
+    )
     parser.add_argument("--commit-every", type=int, default=100)
     parser.add_argument("--shard-id", type=int, default=0)
     parser.add_argument("--num-shards", type=int, default=1)
@@ -95,6 +108,7 @@ def main() -> None:
             tensor_parallel_size=args.tensor_parallel_size,
             dtype=args.dtype,
             seed=args.seed,
+            enforce_eager=args.enforce_eager,
         )
 
     run_generation(backend=backend, config=config)
