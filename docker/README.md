@@ -1,41 +1,56 @@
 # Docker Workflow
 
+This directory defines the container build used for Leonardo runs.
+
 ## Purpose
-This Docker image is the source build artifact for the Qwen synthetic-data generator runtime.
 
-It is used for:
-- CI builds via GitHub Actions (pushed to GHCR)
-- local container smoke validation (if you have Docker)
-- conversion into a Singularity `.sif` for CINECA / Leonardo
+The Docker image is the source artifact for the Leonardo runtime. It is:
 
-The image is intentionally **deps-only**.
+- built in GitHub Actions as `linux/amd64`
+- pushed to GHCR
+- pulled on Mac
+- saved as a Docker tar
+- uploaded to Leonardo
+- converted on Leonardo into a Singularity sandbox with `singularity build --sandbox`
+
 Model weights are not baked into the image.
 
-## CI Build (primary path)
+## Current Build
 
-The image is built automatically by GitHub Actions on push to `activity-chain-phase-a` or `main`.
+- Dockerfile: [`docker/Dockerfile.qwen-generator`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/docker/Dockerfile.qwen-generator)
+- base image: `nvidia/cuda:12.4.1-devel-ubuntu22.04`
+- Python runtime: `python3`
+- key runtime packages:
+  - `vllm==0.18.0`
+  - `transformers==5.3.0`
+  - `huggingface_hub==1.7.2`
 
-See `.github/workflows/build-container.yml`.
+The image is intentionally dependency-focused. The repository code is copied into the image, but model weights and cluster caches live outside the image.
 
-The built image lands at:
-```
+## CI Build
+
+GitHub Actions workflow:
+
+- [build-container.yml](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/.github/workflows/build-container.yml)
+
+The image is published to:
+
+```text
 ghcr.io/umaraslam66/bonzai-qwen-generator:<tag>
 ```
 
-To trigger manually:
-```bash
-gh workflow run build-container.yml --ref activity-chain-phase-a
-```
+## Local Build
 
-## Local Build (optional)
-
-If you have enough disk and want to test locally:
+Optional local build:
 
 ```bash
 docker build --platform linux/amd64 -f docker/Dockerfile.qwen-generator -t bonzai/qwen-generator:local .
 ```
 
-## Local CPU Smoke Test
+## Local Smoke Test
+
+Mock backend only:
+
 ```bash
 docker run --rm \
   -e OUTPUT_ROOT=/workspace/data/container-smoke \
@@ -44,13 +59,25 @@ docker run --rm \
   scripts/run_activity_chain_smoke_test.py --output-dir /workspace/data/container-smoke
 ```
 
-This smoke path uses the `mock` backend and does not require a local GPU.
+## Leonardo Transfer Pattern
 
-## Base Image
+The current working transfer pattern is:
 
-Uses `nvidia/cuda:12.4.1-runtime-ubuntu22.04` (runtime, not devel).
+```bash
+docker pull --platform linux/amd64 ghcr.io/umaraslam66/bonzai-qwen-generator:<tag>
+docker save ghcr.io/umaraslam66/bonzai-qwen-generator:<tag> > /tmp/bonzai-qwen-generator.tar
+scp /tmp/bonzai-qwen-generator.tar uaslam00@login.leonardo.cineca.it:/leonardo_work/AIFAC_P02_222/containers/
+```
 
-Why runtime instead of devel:
-- vllm ships prebuilt wheels, no CUDA compilation needed at install time
-- runtime image is ~2GB smaller, fits CI disk limits
-- Leonardo A100 drivers are compatible with CUDA 12.4
+Then on Leonardo:
+
+```bash
+export WORK=/leonardo_work/AIFAC_P02_222
+export SINGULARITY_TMPDIR=${WORK}/tmp
+mkdir -p ${SINGULARITY_TMPDIR}
+singularity build --sandbox \
+  ${WORK}/containers/bonzai-qwen-generator \
+  docker-archive://${WORK}/containers/bonzai-qwen-generator.tar
+```
+
+`.sif` creation is intentionally not the main workflow here because login-node compression has been unreliable for large images.
