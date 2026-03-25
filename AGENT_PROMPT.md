@@ -78,6 +78,32 @@ The `-L/.singularity.d/libs` path should contain `libcuda.so.1` (bind-mounted fr
 - Must use local model path (no internet on compute nodes)
 - `language_model_only=True` must be set (Qwen3.5 is multimodal, we only need text)
 
+## Where We Stand Right Now (2026-03-25)
+
+**Read `CLAUDE.md` for the full progress log, all issues, and "What Failed" table.**
+
+- The latest CI build is **green** on GitHub Actions (branch `activity-chain-phase-a`). It uses `nvidia/cuda:12.4.1-devel-ubuntu22.04` base with a `libcuda.so.1` stub symlink. This has NOT been tested on Leonardo yet.
+- Model weights (19GB) are already on Leonardo at `$FAST/bonzai_cache/huggingface/Qwen--Qwen3.5-9B`.
+- Code is already on Leonardo at `$WORK/bonzai/sentiment-action-transformer`.
+- An old container sandbox exists on Leonardo but is stale — needs rebuild from the latest CI image.
+- 0 core hours consumed out of 40,000 budget.
+
+**The standard deploy cycle** (detailed in `commands.md`):
+1. On Mac: `step ssh login` → `docker pull` → `docker save ... | ssh leonardo 'cat > .tar'`
+2. On Leonardo (tmux): `singularity build --sandbox ... docker-archive://...tar`
+3. On Mac: `rsync` code to Leonardo
+4. On Leonardo: `export` env vars → `sbatch` the job
+5. Check: `squeue`, `tail -f bonzai-qwen-gen-<JOBID>.out/.err`
+
+**The untested fix**: The latest Dockerfile adds `ln -s /usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so /usr/lib/x86_64-linux-gnu/libcuda.so.1` so that Triton's gcc can link against it. This may or may not solve the problem. If it doesn't, a fundamentally different approach to the Triton/Singularity issue is needed.
+
+**If the stub fix fails**, consider these alternative approaches (not yet tried):
+- Pre-compile Triton kernels during Docker build (warm the cache)
+- Set `VLLM_USE_V1=0` to use V0 engine (may avoid Triton during inspection)
+- Set `VLLM_ATTENTION_BACKEND=FLASH_ATTN` to bypass Triton attention kernels
+- Remove `--cleanenv` from sbatch and instead selectively `unset` problematic vars
+- Use `vllm serve` as a server process instead of the Python API (different code path)
+
 ## What Success Looks Like
 A submitted Slurm job that:
 1. Loads Qwen3.5-9B via vLLM
