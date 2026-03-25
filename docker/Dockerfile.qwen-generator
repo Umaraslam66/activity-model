@@ -21,7 +21,9 @@ RUN apt-get update && \
       git \
       gcc \
       g++ && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    ln -s /usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so \
+          /usr/lib/x86_64-linux-gnu/libcuda.so.1
 
 WORKDIR /workspace
 
