@@ -105,6 +105,46 @@ python scripts/run_activity_chain_smoke_test.py
 
 This uses the mock backend only. No GPU and no model weights are required.
 
+### OpenRouter probe
+
+Use this to test prompt and schema ideas against `qwen/qwen3.5-9b` locally before spending Leonardo GPU time.
+
+The script is:
+
+- [`scripts/probe_openrouter_qwen.py`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/scripts/probe_openrouter_qwen.py)
+
+Export your API key in the shell:
+
+```bash
+export OPENROUTER_API_KEY=...
+```
+
+Basic free-form prompt probe:
+
+```bash
+python scripts/probe_openrouter_qwen.py \
+  --user-prompt "Generate a plausible weekday activity skeleton for a 32-year-old parent in a transit-rich city."
+```
+
+Probe the current Bonzai prompt using a locally generated seed:
+
+```bash
+python scripts/probe_openrouter_qwen.py \
+  --seed-index 0 \
+  --dump-content /tmp/qwen-probe.txt
+```
+
+Probe with the current activity-chain schema:
+
+```bash
+python scripts/probe_openrouter_qwen.py \
+  --seed-index 0 \
+  --use-activity-schema \
+  --dump-response /tmp/qwen-probe-response.json
+```
+
+The script sends requests to the OpenRouter chat completions API and supports `response_format` with `json_schema`, which is the documented OpenRouter structured-output path.
+
 ## Container Build
 
 The image is built by GitHub Actions from:
