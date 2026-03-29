@@ -200,7 +200,8 @@ def _extract_content(resp: dict[str, Any]) -> str:
     choices = resp.get("choices") or []
     if not choices:
         raise SystemExit("OpenRouter response did not include choices.")
-    message = choices[0].get("message") or {}
+    choice = choices[0]
+    message = choice.get("message") or {}
     content = message.get("content", "")
     if isinstance(content, list):
         parts = []
@@ -210,7 +211,25 @@ def _extract_content(resp: dict[str, Any]) -> str:
         return "".join(parts)
     if isinstance(content, str):
         return content
-    return json.dumps(content, ensure_ascii=False)
+
+    parsed = message.get("parsed")
+    if parsed is not None:
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
+
+    tool_calls = message.get("tool_calls")
+    if tool_calls:
+        return json.dumps(tool_calls, indent=2, ensure_ascii=False)
+
+    if "text" in choice and isinstance(choice["text"], str):
+        return choice["text"]
+
+    refusal = message.get("refusal")
+    if refusal:
+        return f"[refusal]\n{refusal}"
+
+    if message:
+        return json.dumps(message, indent=2, ensure_ascii=False)
+    return json.dumps(choice, indent=2, ensure_ascii=False)
 
 
 def _dump_if_requested(path: str | None, content: str) -> None:
@@ -230,12 +249,16 @@ def main() -> None:
 
     content = _extract_content(response)
     usage = response.get("usage")
+    choices = response.get("choices") or []
+    finish_reason = choices[0].get("finish_reason") if choices else None
 
     print("=== Request Summary ===")
     print(f"model={args.model}")
     print(f"temperature={args.temperature}")
     print(f"max_tokens={args.max_tokens}")
     print(f"structured_output={'response_format' in payload}")
+    if finish_reason is not None:
+        print(f"finish_reason={finish_reason}")
     print()
 
     if usage:
@@ -246,8 +269,8 @@ def main() -> None:
     print("=== Assistant Content ===")
     print(content)
 
-    _dump_if_requested(args.dump-response, json.dumps(response, indent=2, ensure_ascii=False))
-    _dump_if_requested(args.dump-content, content)
+    _dump_if_requested(args.dump_response, json.dumps(response, indent=2, ensure_ascii=False))
+    _dump_if_requested(args.dump_content, content)
 
 
 if __name__ == "__main__":
