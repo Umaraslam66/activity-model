@@ -22,12 +22,12 @@ RUN apt-get update && \
       python3-pip \
       python3-venv \
       python3-dev \
-      curl \
       git \
       ccache \
       cmake \
       gcc \
       g++ \
+      libnuma-dev \
       ninja-build && \
     rm -rf /var/lib/apt/lists/* && \
     ln -s /usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so \
@@ -37,16 +37,31 @@ WORKDIR /workspace
 
 COPY requirements_inference.txt requirements_smoke.txt ./
 
-# Build vLLM from source for the target CUDA environment, then install the
-# rest of the runtime dependencies used by the Leonardo jobs.
-RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    git clone --depth 1 --branch "${VLLM_REF}" https://github.com/vllm-project/vllm.git /tmp/vllm && \
-    python3 -m pip install --no-build-isolation /tmp/vllm && \
-    python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
-    python3 -m pip install --no-deps "transformers==5.5.0" "huggingface_hub==1.7.2" "accelerate==1.13.0" && \
-    python3 -c "from importlib import import_module; module = import_module('vllm.model_executor.models.gemma4'); assert hasattr(module, 'Gemma4ForConditionalGeneration'), 'Gemma4 vLLM implementation missing'; print('gemma4_vllm_impl_ok')" && \
-    python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}')" > /etc/bonzai-build-manifest.txt && \
-    rm -rf /tmp/vllm
+# Install a CUDA-compatible PyTorch first, then build vLLM from source using
+# the documented "existing PyTorch installation" flow.
+RUN python3 -m pip install --upgrade pip setuptools wheel uv
+
+RUN python3 -m pip install \
+    --index-url https://download.pytorch.org/whl/cu121 \
+    torch==2.5.0 \
+    torchvision==0.20.0 \
+    torchaudio==2.5.0
+
+RUN git clone --depth 1 --branch "${VLLM_REF}" https://github.com/vllm-project/vllm.git /tmp/vllm
+
+RUN cd /tmp/vllm && \
+    python3 use_existing_torch.py && \
+    uv pip install --system -r requirements/build.txt && \
+    uv pip install --system --no-build-isolation .
+
+RUN python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
+    python3 -m pip install --no-deps "transformers==5.5.0" "huggingface_hub==1.7.2" "accelerate==1.13.0"
+
+RUN python3 -c "from importlib import import_module; module = import_module('vllm.model_executor.models.gemma4'); assert hasattr(module, 'Gemma4ForConditionalGeneration'), 'Gemma4 vLLM implementation missing'; print('gemma4_vllm_impl_ok')"
+
+RUN python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}')" > /etc/bonzai-build-manifest.txt
+
+RUN rm -rf /tmp/vllm
 
 COPY . /workspace
 
