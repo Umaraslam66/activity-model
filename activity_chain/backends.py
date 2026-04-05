@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from .prompting import build_chat_prompt
 from .schema import ACTIVITY_CHAIN_JSON_SCHEMA, REASON_TAGS, ZONE_CHOICES
+from .vllm_compat import patch_vllm_transformers_base_for_nullable_subconfigs, prepare_model_dir_for_vllm
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,11 @@ class VllmBackend:
         from vllm import LLM, SamplingParams  # type: ignore
         from vllm.sampling_params import StructuredOutputsParams  # type: ignore
 
+        patch_vllm_transformers_base_for_nullable_subconfigs()
+        runtime_model = prepare_model_dir_for_vllm(model)
+
         llm_kwargs: dict[str, Any] = {
-            "model": model,
+            "model": runtime_model,
             "trust_remote_code": trust_remote_code,
             "dtype": dtype,
             "max_model_len": max_model_len,
@@ -55,7 +59,7 @@ class VllmBackend:
         self._llm = LLM(
             **llm_kwargs,
         )
-        self._tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=trust_remote_code)
+        self._tokenizer = AutoTokenizer.from_pretrained(runtime_model, trust_remote_code=trust_remote_code)
         self._sampling = SamplingParams(
             temperature=temperature,
             top_p=top_p,

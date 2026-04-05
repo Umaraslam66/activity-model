@@ -12,6 +12,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from activity_chain.vllm_compat import (
+    get_null_subconfigs,
+    patch_vllm_transformers_base_for_nullable_subconfigs,
+    prepare_model_dir_for_vllm,
+)
+
 
 def _print_header(title: str) -> None:
     print(f"\n=== {title} ===", flush=True)
@@ -102,18 +108,28 @@ def main() -> None:
     if not model_path.is_dir():
         raise FileNotFoundError(f"Model directory not found: {model_path}")
 
+    original_null_subconfigs = get_null_subconfigs(model_path)
+    runtime_model_path = Path(prepare_model_dir_for_vllm(model_path))
+    runtime_null_subconfigs = get_null_subconfigs(runtime_model_path)
+
     from transformers import AutoConfig, AutoTokenizer
 
     config = AutoConfig.from_pretrained(
-        str(model_path),
+        str(runtime_model_path),
         trust_remote_code=args.trust_remote_code,
         local_files_only=True,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        str(model_path),
+        str(runtime_model_path),
         trust_remote_code=args.trust_remote_code,
         local_files_only=True,
     )
+    print(f"runtime_model_path={runtime_model_path}", flush=True)
+    print(f"original_null_subconfigs={original_null_subconfigs}", flush=True)
+    print(f"runtime_null_subconfigs={runtime_null_subconfigs}", flush=True)
+    print(f"config_sub_configs={getattr(config, 'sub_configs', None)}", flush=True)
+    print(f"audio_config_type={type(getattr(config, 'audio_config', None)).__name__}", flush=True)
+    print(f"vision_config_type={type(getattr(config, 'vision_config', None)).__name__}", flush=True)
     print(f"architectures={getattr(config, 'architectures', None)}", flush=True)
     print(f"tokenizer={tokenizer.__class__.__name__}", flush=True)
 
@@ -124,8 +140,10 @@ def main() -> None:
     _print_header("vLLM Engine")
     from vllm import LLM, SamplingParams
 
+    patch_vllm_transformers_base_for_nullable_subconfigs()
+
     llm_kwargs = {
-        "model": str(model_path),
+        "model": str(runtime_model_path),
         "trust_remote_code": args.trust_remote_code,
         "dtype": args.dtype,
         "max_model_len": args.max_model_len,

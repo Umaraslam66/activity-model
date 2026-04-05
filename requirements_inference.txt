@@ -1,7 +1,8 @@
 # Runtime dependencies for real Leonardo generation.
 #
-# Gemma 4 support is available in current vLLM, but we still pin
-# transformers in the Dockerfile to keep the Gemma runtime explicit.
+# Gemma 4 requires a vLLM runtime that exposes the native Gemma4 loader path.
+# The Dockerfile now asserts that capability at build time so CI fails fast if
+# the installed package falls back to the generic Transformers backend.
 
 jsonschema==4.26.0
 hf_transfer==0.1.9
