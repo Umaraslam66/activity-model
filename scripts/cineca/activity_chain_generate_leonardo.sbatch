@@ -22,7 +22,7 @@ set -euo pipefail
 # - Gemma 4 31B on Leonardo requires 2 GPUs with tensor parallel size 2.
 # - Replace ABM_LLM_MODEL with the local staged model path on Leonardo.
 # - For short smoke tests on Leonardo, keep --partition=boost_usr_prod and submit with --qos=boost_qos_dbg.
-# - Prefer one shard per GPU job instead of multi-GPU tensor parallelism for generation.
+# - For this Gemma 4 31B path, prefer one shard per 2-GPU job because the model itself uses tensor parallel size 2.
 
 PROJECT_ROOT="${PROJECT_ROOT:?Set PROJECT_ROOT to the repo checkout on CINECA}"
 CONTAINER_IMAGE="${CONTAINER_IMAGE:?Set CONTAINER_IMAGE to an Apptainer/Singularity image with vLLM installed}"

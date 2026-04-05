@@ -18,10 +18,10 @@ Model weights are not baked into the image.
 ## Current Build
 
 - Dockerfile: [`docker/Dockerfile.qwen-generator`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/docker/Dockerfile.qwen-generator)
-- base image: `nvidia/cuda:12.4.1-devel-ubuntu22.04`
+- base image: `nvidia/cuda:12.2.2-devel-ubuntu22.04`
 - Python runtime: `python3`
 - key runtime packages:
-  - `vllm==0.18.1`
+  - `vLLM` built from source with default ref `v0.18.1`
   - `transformers==5.5.0`
   - `huggingface_hub==1.7.2`
 
@@ -35,6 +35,12 @@ GitHub Actions workflow:
 
 - [build-container.yml](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/.github/workflows/build-container.yml)
 
+Current CI behavior:
+
+- pull requests build the container and run the mock smoke test inside the image
+- branch pushes build, smoke-test, and then push the image to GHCR
+- BuildKit cache is stored in GitHub Actions to avoid full rebuilds on every change
+
 The image is published to:
 
 ```text
@@ -47,6 +53,16 @@ Optional local build:
 
 ```bash
 docker build --platform linux/amd64 -f docker/Dockerfile.qwen-generator -t bonzai/qwen-generator:local .
+```
+
+To test a different vLLM tag or commit:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --build-arg VLLM_REF=<tag-or-commit> \
+  -f docker/Dockerfile.qwen-generator \
+  -t bonzai/qwen-generator:local .
 ```
 
 ## Local Smoke Test
@@ -83,3 +99,5 @@ singularity build --sandbox \
 ```
 
 `.sif` creation is intentionally not the main workflow here because login-node compression has been unreliable for large images.
+
+Avoid treating `singularity pull docker://...` to a `.sif` as the default Leonardo path for this project. The repo is standardized on Docker tar upload followed by `singularity build --sandbox`.

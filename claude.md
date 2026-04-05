@@ -167,6 +167,12 @@ The image is built by GitHub Actions from:
 - [`docker/Dockerfile.qwen-generator`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/docker/Dockerfile.qwen-generator)
 - [`requirements_inference.txt`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/requirements_inference.txt)
 
+Current CI expectations:
+
+- pull requests build the image and run the mock smoke test inside the container
+- branch pushes build, smoke-test, and then push to GHCR
+- GitHub Actions cache is enabled to avoid recompiling the whole image on every run
+
 Push the branch:
 
 ```bash
@@ -361,6 +367,7 @@ Use these files first:
 
 - [`claude.md`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/claude.md)
 - [`AGENT_PROMPT.md`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/AGENT_PROMPT.md)
+- [`docs/LEONARDO_GEMMA4_RUNBOOK.md`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/docs/LEONARDO_GEMMA4_RUNBOOK.md)
 - [`docker/Dockerfile.qwen-generator`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/docker/Dockerfile.qwen-generator)
 - [`scripts/cineca/activity_chain_generate_leonardo.sbatch`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/scripts/cineca/activity_chain_generate_leonardo.sbatch)
 - [`scripts/cineca/activity_chain_probe_leonardo.sbatch`](/Users/umaraslam/Documents/dynamo/Bonzai/LTM/SAT/scripts/cineca/activity_chain_probe_leonardo.sbatch)

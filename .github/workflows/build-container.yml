@@ -10,15 +10,30 @@ on:
       - 'requirements_inference.txt'
       - 'requirements_smoke.txt'
       - '.github/workflows/build-container.yml'
+  pull_request:
+    paths:
+      - 'activity_chain/**'
+      - 'scripts/**'
+      - 'docker/**'
+      - 'requirements_inference.txt'
+      - 'requirements_smoke.txt'
+      - '.github/workflows/build-container.yml'
   workflow_dispatch:
+
+concurrency:
+  group: build-container-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/bonzai-qwen-generator
+  TEST_IMAGE: bonzai/qwen-generator:ci
+  CACHE_SCOPE: bonzai-qwen-generator-amd64
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: read
       packages: write
@@ -37,6 +52,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -53,8 +69,26 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
 
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.qwen-generator
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.TEST_IMAGE }}
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.CACHE_SCOPE }}
+
+      - name: Smoke test image
+        run: |
+          docker run --rm \
+            ${{ env.TEST_IMAGE }} \
+            scripts/run_activity_chain_smoke_test.py --output-dir /tmp/container-smoke
+
       - name: Build and push
-        uses: docker/build-push-action@v5
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile.qwen-generator
@@ -62,11 +96,19 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache: true
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.CACHE_SCOPE }}
 
-      - name: Print pull command for Leonardo
+      - name: Print Leonardo transfer reminder
+        if: github.event_name != 'pull_request'
         run: |
           echo "============================================"
-          echo "To pull on Leonardo:"
-          echo "  singularity pull \$WORK/containers/bonzai-qwen-generator.sif docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(echo ${{ github.sha }} | head -c 7)"
+          echo "Published image tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo
+          echo "Preferred Leonardo path:"
+          echo "  1. Pull the exact GHCR tag on your Mac"
+          echo "  2. docker save it to a tar archive"
+          echo "  3. Upload the tar to Leonardo"
+          echo "  4. singularity build --sandbox from docker-archive://..."
           echo "============================================"

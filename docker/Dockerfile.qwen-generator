@@ -1,7 +1,14 @@
 FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 
-ARG VLLM_REF=main
+ARG VLLM_REF=v0.18.1
 ARG MAX_JOBS=8
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
+ARG TORCH_VERSION=2.5.0
+ARG TORCHVISION_VERSION=0.20.0
+ARG TORCHAUDIO_VERSION=2.5.0
+ARG TRANSFORMERS_VERSION=5.5.0
+ARG HUGGINGFACE_HUB_VERSION=1.7.2
+ARG ACCELERATE_VERSION=1.13.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -42,10 +49,10 @@ COPY requirements_inference.txt requirements_smoke.txt ./
 RUN python3 -m pip install --upgrade pip setuptools wheel uv
 
 RUN python3 -m pip install \
-    --index-url https://download.pytorch.org/whl/cu121 \
-    torch==2.5.0 \
-    torchvision==0.20.0 \
-    torchaudio==2.5.0
+    --index-url "${TORCH_INDEX_URL}" \
+    "torch==${TORCH_VERSION}" \
+    "torchvision==${TORCHVISION_VERSION}" \
+    "torchaudio==${TORCHAUDIO_VERSION}"
 
 RUN git clone --depth 1 --branch "${VLLM_REF}" https://github.com/vllm-project/vllm.git /tmp/vllm
 
@@ -55,11 +62,14 @@ RUN cd /tmp/vllm && \
     uv pip install --system --no-build-isolation .
 
 RUN python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
-    python3 -m pip install --no-deps "transformers==5.5.0" "huggingface_hub==1.7.2" "accelerate==1.13.0"
+    python3 -m pip install --no-deps \
+      "transformers==${TRANSFORMERS_VERSION}" \
+      "huggingface_hub==${HUGGINGFACE_HUB_VERSION}" \
+      "accelerate==${ACCELERATE_VERSION}"
 
 RUN python3 -c "from importlib import import_module; module = import_module('vllm.model_executor.models.gemma4'); assert hasattr(module, 'Gemma4ForConditionalGeneration'), 'Gemma4 vLLM implementation missing'; print('gemma4_vllm_impl_ok')"
 
-RUN python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}')" > /etc/bonzai-build-manifest.txt
+RUN python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}'); print('torch_index_url=${TORCH_INDEX_URL}')" > /etc/bonzai-build-manifest.txt
 
 RUN rm -rf /tmp/vllm
 
