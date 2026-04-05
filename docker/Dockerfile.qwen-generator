@@ -1,4 +1,7 @@
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
+
+ARG VLLM_REF=main
+ARG MAX_JOBS=8
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -10,7 +13,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PROJECT_ROOT=/workspace \
     OUTPUT_ROOT=/workspace/data/container-smoke \
     TOKENIZERS_PARALLELISM=false \
-    CUDA_HOME=/usr/local/cuda
+    CUDA_HOME=/usr/local/cuda \
+    MAX_JOBS=${MAX_JOBS}
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -18,9 +22,13 @@ RUN apt-get update && \
       python3-pip \
       python3-venv \
       python3-dev \
+      curl \
       git \
+      ccache \
+      cmake \
       gcc \
-      g++ && \
+      g++ \
+      ninja-build && \
     rm -rf /var/lib/apt/lists/* && \
     ln -s /usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so \
           /usr/lib/x86_64-linux-gnu/libcuda.so.1
@@ -29,12 +37,16 @@ WORKDIR /workspace
 
 COPY requirements_inference.txt requirements_smoke.txt ./
 
-# Install vLLM, then pin transformers to a Gemma-4-capable release.
+# Build vLLM from source for the target CUDA environment, then install the
+# rest of the runtime dependencies used by the Leonardo jobs.
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    git clone --depth 1 --branch "${VLLM_REF}" https://github.com/vllm-project/vllm.git /tmp/vllm && \
+    python3 -m pip install --no-build-isolation /tmp/vllm && \
     python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
     python3 -m pip install --no-deps "transformers==5.5.0" "huggingface_hub==1.7.2" "accelerate==1.13.0" && \
     python3 -c "from importlib import import_module; module = import_module('vllm.model_executor.models.gemma4'); assert hasattr(module, 'Gemma4ForConditionalGeneration'), 'Gemma4 vLLM implementation missing'; print('gemma4_vllm_impl_ok')" && \
-    python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}')" > /etc/bonzai-build-manifest.txt
+    python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}')" > /etc/bonzai-build-manifest.txt && \
+    rm -rf /tmp/vllm
 
 COPY . /workspace
 
