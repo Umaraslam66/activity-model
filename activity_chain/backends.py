@@ -31,21 +31,31 @@ class VllmBackend:
         dtype: str,
         seed: int,
         enforce_eager: bool,
+        trust_remote_code: bool,
+        language_model_only: bool,
+        text_only_multimodal: bool,
     ) -> None:
         from transformers import AutoTokenizer  # type: ignore
         from vllm import LLM, SamplingParams  # type: ignore
         from vllm.sampling_params import StructuredOutputsParams  # type: ignore
 
+        llm_kwargs: dict[str, Any] = {
+            "model": model,
+            "trust_remote_code": trust_remote_code,
+            "dtype": dtype,
+            "max_model_len": max_model_len,
+            "tensor_parallel_size": tensor_parallel_size,
+            "enforce_eager": enforce_eager,
+        }
+        if language_model_only:
+            llm_kwargs["language_model_only"] = True
+        if text_only_multimodal:
+            llm_kwargs["limit_mm_per_prompt"] = {"image": 0, "audio": 0}
+
         self._llm = LLM(
-            model=model,
-            trust_remote_code=False,
-            dtype=dtype,
-            max_model_len=max_model_len,
-            tensor_parallel_size=tensor_parallel_size,
-            language_model_only=True,
-            enforce_eager=enforce_eager,
+            **llm_kwargs,
         )
-        self._tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=False)
+        self._tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=trust_remote_code)
         self._sampling = SamplingParams(
             temperature=temperature,
             top_p=top_p,

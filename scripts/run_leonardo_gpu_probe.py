@@ -31,6 +31,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
     parser.add_argument("--prompt", default="Reply with the single word ready.")
     parser.add_argument("--enforce-eager", action="store_true")
+    parser.add_argument("--trust-remote-code", action="store_true")
+    parser.add_argument("--language-model-only", action="store_true")
+    parser.add_argument("--text-only-multimodal", action="store_true")
     return parser.parse_args()
 
 
@@ -103,12 +106,12 @@ def main() -> None:
 
     config = AutoConfig.from_pretrained(
         str(model_path),
-        trust_remote_code=False,
+        trust_remote_code=args.trust_remote_code,
         local_files_only=True,
     )
     tokenizer = AutoTokenizer.from_pretrained(
         str(model_path),
-        trust_remote_code=False,
+        trust_remote_code=args.trust_remote_code,
         local_files_only=True,
     )
     print(f"architectures={getattr(config, 'architectures', None)}", flush=True)
@@ -121,16 +124,20 @@ def main() -> None:
     _print_header("vLLM Engine")
     from vllm import LLM, SamplingParams
 
-    llm = LLM(
-        model=str(model_path),
-        trust_remote_code=False,
-        dtype=args.dtype,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        language_model_only=True,
-        enforce_eager=args.enforce_eager,
-    )
+    llm_kwargs = {
+        "model": str(model_path),
+        "trust_remote_code": args.trust_remote_code,
+        "dtype": args.dtype,
+        "max_model_len": args.max_model_len,
+        "tensor_parallel_size": args.tensor_parallel_size,
+        "gpu_memory_utilization": args.gpu_memory_utilization,
+        "enforce_eager": args.enforce_eager,
+    }
+    if args.language_model_only:
+        llm_kwargs["language_model_only"] = True
+    if args.text_only_multimodal:
+        llm_kwargs["limit_mm_per_prompt"] = {"image": 0, "audio": 0}
+    llm = LLM(**llm_kwargs)
     sampling = SamplingParams(
         temperature=0.0,
         max_tokens=16,

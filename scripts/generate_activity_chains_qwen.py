@@ -31,7 +31,7 @@ def _env_flag(name: str, *, default: bool) -> bool:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate activity_chain_v1 synthetic data.")
     parser.add_argument("--backend", choices=["vllm", "mock"], default=os.environ.get("ABM_BACKEND", "vllm"))
-    parser.add_argument("--model", default=os.environ.get("ABM_LLM_MODEL", ""), help="Qwen model id for vLLM runs.")
+    parser.add_argument("--model", default=os.environ.get("ABM_LLM_MODEL", ""), help="Model path or Hugging Face id for vLLM runs.")
     parser.add_argument("--output", default=_default_output_path())
     parser.add_argument("--total", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -47,6 +47,24 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=_env_flag("ABM_VLLM_ENFORCE_EAGER", default=False),
         help="Disable vLLM torch.compile / cudagraph path for stability.",
+    )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        default=_env_flag("ABM_TRUST_REMOTE_CODE", default=False),
+        help="Enable trust_remote_code when loading tokenizer/model via vLLM.",
+    )
+    parser.add_argument(
+        "--language-model-only",
+        action="store_true",
+        default=_env_flag("ABM_LANGUAGE_MODEL_ONLY", default=False),
+        help="Use vLLM language_model_only=True for multimodal checkpoints with pure-text execution.",
+    )
+    parser.add_argument(
+        "--text-only-multimodal",
+        action="store_true",
+        default=_env_flag("ABM_TEXT_ONLY_MULTIMODAL", default=False),
+        help="Disable image/audio allocation for multimodal checkpoints during text-only runs.",
     )
     parser.add_argument("--commit-every", type=int, default=100)
     parser.add_argument("--shard-id", type=int, default=0)
@@ -109,6 +127,9 @@ def main() -> None:
             dtype=args.dtype,
             seed=args.seed,
             enforce_eager=args.enforce_eager,
+            trust_remote_code=args.trust_remote_code,
+            language_model_only=args.language_model_only,
+            text_only_multimodal=args.text_only_multimodal,
         )
 
     run_generation(backend=backend, config=config)

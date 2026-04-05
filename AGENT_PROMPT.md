@@ -1,4 +1,4 @@
-# Task: Run Qwen3.5-9B on Leonardo for Synthetic Data Generation
+# Task: Run Gemma 4 on Leonardo for Synthetic Data Generation
 
 ## Read First
 
@@ -20,7 +20,7 @@ Before doing any work, read these files:
 Bonzai is building an urban mobility simulator. This repository generates synthetic activity-chain data using a large teacher model.
 
 Current phase:
-- run `Qwen3.5-9B` on CINECA Leonardo A100 GPUs
+- run `google/gemma-4-31B-it` on CINECA Leonardo A100 GPUs
 - generate structured JSONL activity-chain records
 - later train a smaller student model on that dataset
 
@@ -33,9 +33,11 @@ Current phase:
 - Docker tar upload to Leonardo
 - Leonardo sandbox build
 - Leonardo GPU startup
-- Qwen3.5 model loading via vLLM
+- the previous Qwen3.5 runtime was stabilized
+- the current target is Gemma 4
 - vLLM on Leonardo when run with:
-  - `language_model_only=True`
+  - `trust_remote_code=True`
+  - `limit_mm_per_prompt={image:0,audio:0}`
   - `enforce_eager=True`
   - `VLLM_USE_STANDALONE_COMPILE=0`
 
@@ -55,6 +57,7 @@ The current blocker is **generation quality / validation**:
 - use the local staged model path, not a Hugging Face model ID
 - use `singularity build --sandbox`, not `.sif`
 - keep `--cleanenv --nv`
+- Gemma 4 31B should be treated as a 2-GPU tensor-parallel deployment on Leonardo
 - use manual commands over wrapper scripts if reliability matters
 
 ## Success Criteria
@@ -72,7 +75,7 @@ If more investigation is needed, prioritize:
 
 - official CINECA Leonardo / Singularity docs
 - official vLLM docs
-- official Qwen model card
+- official Gemma 4 model card
 - actual vLLM source code when runtime behavior is unclear
 
 Do not treat old failed paths as the source of truth. The surviving source of truth is `claude.md` plus the current runtime files in `scripts/` and `activity_chain/`.

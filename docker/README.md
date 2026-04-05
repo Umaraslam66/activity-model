@@ -21,9 +21,11 @@ Model weights are not baked into the image.
 - base image: `nvidia/cuda:12.4.1-devel-ubuntu22.04`
 - Python runtime: `python3`
 - key runtime packages:
-  - `vllm==0.18.0`
-  - `transformers==5.3.0`
+  - `vllm==0.18.1`
+  - `transformers==5.5.0`
   - `huggingface_hub==1.7.2`
+
+Historical filenames still mention `qwen`, but the current rollout target is Gemma 4.
 
 The image is intentionally dependency-focused. The repository code is copied into the image, but model weights and cluster caches live outside the image.
 

@@ -1,9 +1,8 @@
-# Runtime dependencies for real Qwen generation.
+# Runtime dependencies for real Leonardo generation.
 #
-# vllm 0.18.0 pins transformers<5, but Qwen3.5 needs transformers>=5.2.0.
-# We let vllm resolve its deps first, then the Dockerfile force-upgrades
-# transformers and huggingface_hub after install.
+# Gemma 4 support is available in current vLLM, but we still pin
+# transformers in the Dockerfile to keep the Gemma runtime explicit.
 
 jsonschema==4.26.0
 hf_transfer==0.1.9
-vllm==0.18.0
+vllm==0.18.1

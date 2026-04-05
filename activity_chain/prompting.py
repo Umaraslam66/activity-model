@@ -24,8 +24,16 @@ def build_chat_prompt(tokenizer: Any, *, scenario_seed: dict[str, Any]) -> str:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": build_user_prompt(scenario_seed)},
     ]
-    return tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=False,
-    )
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=False,
+        )
+    except TypeError:
+        return tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+        )

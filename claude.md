@@ -7,7 +7,7 @@ This file is the main operator guide for the SAT directory.
 Bonzai is an urban mobility simulator. This repository is the model-side workspace used to generate synthetic full-day activity-chain records.
 
 Current goal:
-- run `Qwen3.5-9B` on CINECA Leonardo A100 GPUs
+- run `google/gemma-4-31B-it` on CINECA Leonardo A100 GPUs
 - generate activity-chain JSONL data
 - later use that synthetic dataset to train a smaller student model
 
@@ -15,20 +15,22 @@ The C++/CUDA simulator itself lives in a separate repository.
 
 ## Current Status
 
-As of `2026-03-25`:
+As of `2026-04-05`:
 
 - local CPU smoke tests work
 - the CI container build path works
 - Docker tar -> Leonardo sandbox conversion works
 - Leonardo GPU startup works
-- Qwen3.5 loads successfully with `vLLM 0.18.0`
-- Leonardo requires `enforce_eager=True` and `VLLM_USE_STANDALONE_COMPILE=0`
+- the previous Qwen3.5 path was stabilized on Leonardo
+- the current rollout target is Gemma 4
+- Leonardo should still use `enforce_eager=True` and `VLLM_USE_STANDALONE_COMPILE=0` until Gemma proves otherwise
 - the current blocker is no longer infrastructure
 - the current blocker is output quality / validation: the model is generating JSON, but records are being rejected by strict chronology / consistency checks
 
 In short:
 - deployment is mostly solved
 - schema / generation design still needs work
+- Gemma 4 needs a fresh Leonardo validation pass
 
 ## Repo Layout
 
@@ -66,11 +68,13 @@ spec/
 
 ### Model / runtime
 
-- model: `Qwen/Qwen3.5-9B`
-- inference engine: `vLLM 0.18.0`
-- transformers in container: `5.3.0`
-- torch in container: `2.10.0+cu128`
-- text-only mode: `language_model_only=True`
+- current model target: `google/gemma-4-31B-it`
+- inference engine target: `vLLM 0.18.1`
+- transformers target in container: `5.5.0`
+- torch version is determined by the resolved vLLM wheel at build time
+- Gemma 4 text-only runs should use `limit_mm_per_prompt={image:0,audio:0}`
+- Gemma 4 Leonardo runs should use `trust_remote_code=True`
+- Gemma 4 31B should default to `tensor_parallel_size=2`
 
 ### Leonardo
 
@@ -107,7 +111,7 @@ This uses the mock backend only. No GPU and no model weights are required.
 
 ### OpenRouter probe
 
-Use this to test prompt and schema ideas against `qwen/qwen3.5-9b` locally before spending Leonardo GPU time.
+Use this to test prompt and schema ideas locally before spending Leonardo GPU time.
 
 The script is:
 
@@ -144,6 +148,17 @@ python scripts/probe_openrouter_qwen.py \
 ```
 
 The script sends requests to the OpenRouter chat completions API and supports `response_format` with `json_schema`, which is the documented OpenRouter structured-output path.
+
+## Gemma 4 Constraints
+
+Historical filenames still mention `qwen`, but the active Leonardo target is now Gemma 4.
+
+Official Gemma 4 / vLLM guidance implies:
+
+- `google/gemma-4-31B-it` is not a 1-GPU drop-in on Leonardo
+- on A100-class hardware, treat 31B as a 2-GPU tensor-parallel workload
+- for text-only workloads, disable image/audio allocation instead of assuming a plain text-only architecture
+- keep `enforce_eager=True` until Leonardo proves the compile path is stable
 
 ## Container Build
 
@@ -236,7 +251,7 @@ python3 -m venv .venv-smoke
 source .venv-smoke/bin/activate
 pip install --upgrade pip huggingface_hub hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1
-hf download Qwen/Qwen3.5-9B --local-dir ${FAST}/bonzai_cache/huggingface/Qwen--Qwen3.5-9B
+hf download google/gemma-4-31B-it --local-dir ${FAST}/bonzai_cache/huggingface/google--gemma-4-31B-it
 deactivate
 ```
 
@@ -250,7 +265,7 @@ export FAST=/leonardo_scratch/fast/AIFAC_P02_222
 cd ${WORK}/bonzai/sentiment-action-transformer
 export PROJECT_ROOT=${WORK}/bonzai/sentiment-action-transformer
 export CONTAINER_IMAGE=${WORK}/containers/bonzai-qwen-generator
-export ABM_LLM_MODEL=${FAST}/bonzai_cache/huggingface/Qwen--Qwen3.5-9B
+export ABM_LLM_MODEL=${FAST}/bonzai_cache/huggingface/google--gemma-4-31B-it
 sbatch scripts/cineca/activity_chain_probe_leonardo.sbatch
 ```
 
@@ -263,7 +278,7 @@ export WORK=/leonardo_work/AIFAC_P02_222
 export FAST=/leonardo_scratch/fast/AIFAC_P02_222
 cd ${WORK}/bonzai/sentiment-action-transformer
 export PROJECT_ROOT=${WORK}/bonzai/sentiment-action-transformer
-export ABM_LLM_MODEL=${FAST}/bonzai_cache/huggingface/Qwen--Qwen3.5-9B
+export ABM_LLM_MODEL=${FAST}/bonzai_cache/huggingface/google--gemma-4-31B-it
 export CONTAINER_IMAGE=${WORK}/containers/bonzai-qwen-generator
 export OUTPUT_ROOT=${WORK}/bonzai/activity_chain_data
 export TOTAL_RECORDS=100
@@ -278,15 +293,15 @@ On Leonardo:
 
 ```bash
 squeue -u $USER
-ls -t bonzai-qwen-gen-*.out | head -1
-ls -t bonzai-qwen-gen-*.err | head -1
+ls -t bonzai-gemma-gen-*.out | head -1
+ls -t bonzai-gemma-gen-*.err | head -1
 ```
 
 Inspect the newest logs:
 
 ```bash
-LATEST_OUT=$(ls -t bonzai-qwen-gen-*.out | head -1)
-LATEST_ERR=$(ls -t bonzai-qwen-gen-*.err | head -1)
+LATEST_OUT=$(ls -t bonzai-gemma-gen-*.out | head -1)
+LATEST_ERR=$(ls -t bonzai-gemma-gen-*.err | head -1)
 tail -50 "$LATEST_OUT"
 tail -50 "$LATEST_ERR"
 ```
@@ -297,20 +312,24 @@ The current Slurm wrapper intentionally uses:
 
 - `--cleanenv`
 - `--nv`
+- `--gres=gpu:2`
 - persistent caches on `$FAST`
 - `HF_HUB_OFFLINE=1`
 - `TRANSFORMERS_OFFLINE=1`
 - `ABM_VLLM_ENFORCE_EAGER=1`
 - `VLLM_USE_STANDALONE_COMPILE=0`
+- `ABM_TRUST_REMOTE_CODE=1`
+- `ABM_TEXT_ONLY_MULTIMODAL=1`
+- `TENSOR_PARALLEL_SIZE=2`
 
 Those settings reflect what has actually worked on Leonardo so far.
 
 ## What Has Been Solved
 
-- Qwen3.5 architecture recognition works with `transformers==5.3.0`
+- the older Qwen3.5 Leonardo path was debugged end-to-end
 - Leonardo sandbox builds work from Docker tar archives
 - GPU startup works on Leonardo
-- vLLM can load the model successfully
+- vLLM can load supported models successfully on Leonardo
 - eager mode works; compile mode does not currently work on Leonardo for this stack
 - structured output schema issues caused by `uniqueItems` have been removed from the vLLM-facing schema
 

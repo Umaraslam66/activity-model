@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=bonzai-qwen-gen
+#SBATCH --job-name=bonzai-gemma-gen
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:2
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=AIFAC_P02_222
 #SBATCH --qos=normal
@@ -15,17 +15,18 @@ set -euo pipefail
 
 # Usage example:
 #   sbatch \
-#     --export=ALL,PROJECT_ROOT=$WORK/bonzai/activity-model,ABM_LLM_MODEL=Qwen/Qwen3.5-9B,CONTAINER_IMAGE=$WORK/containers/bonzai-qwen-generator.sif,OUTPUT_ROOT=$WORK/bonzai/activity_chain_data,TOTAL_RECORDS=1000,NUM_SHARDS=1,SHARD_ID=0 \
+#     --export=ALL,PROJECT_ROOT=$WORK/bonzai/activity-model,ABM_LLM_MODEL=$FAST/bonzai_cache/huggingface/google--gemma-4-31B-it,CONTAINER_IMAGE=$WORK/containers/bonzai-qwen-generator,OUTPUT_ROOT=$WORK/bonzai/activity_chain_data,TOTAL_RECORDS=1000,NUM_SHARDS=1,SHARD_ID=0 \
 #     scripts/cineca/activity_chain_generate_leonardo.sbatch
 #
 # Notes:
-# - Replace ABM_LLM_MODEL with the exact official Hugging Face model id you are serving on Leonardo.
+# - Gemma 4 31B on Leonardo requires 2 GPUs with tensor parallel size 2.
+# - Replace ABM_LLM_MODEL with the local staged model path on Leonardo.
 # - For short smoke tests on Leonardo, keep --partition=boost_usr_prod and submit with --qos=boost_qos_dbg.
 # - Prefer one shard per GPU job instead of multi-GPU tensor parallelism for generation.
 
 PROJECT_ROOT="${PROJECT_ROOT:?Set PROJECT_ROOT to the repo checkout on CINECA}"
 CONTAINER_IMAGE="${CONTAINER_IMAGE:?Set CONTAINER_IMAGE to an Apptainer/Singularity image with vLLM installed}"
-ABM_LLM_MODEL="${ABM_LLM_MODEL:?Set ABM_LLM_MODEL to the Qwen model id}"
+ABM_LLM_MODEL="${ABM_LLM_MODEL:?Set ABM_LLM_MODEL to the local Gemma model path}"
 OUTPUT_ROOT="${OUTPUT_ROOT:?Set OUTPUT_ROOT to the destination directory for shard JSONL files}"
 
 TOTAL_RECORDS="${TOTAL_RECORDS:-1000}"
@@ -38,7 +39,7 @@ MAX_MODEL_LEN="${MAX_MODEL_LEN:-8192}"
 TEMPERATURE="${TEMPERATURE:-0.8}"
 TOP_P="${TOP_P:-0.95}"
 DTYPE="${DTYPE:-bfloat16}"
-TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
+TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-2}"
 ARCHETYPES="${ARCHETYPES:-}"
 
 if [[ -n "${FAST:-}" ]]; then
@@ -75,6 +76,9 @@ export PYTHONNOUSERSITE=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export ABM_VLLM_ENFORCE_EAGER="${ABM_VLLM_ENFORCE_EAGER:-1}"
 export VLLM_USE_STANDALONE_COMPILE="${VLLM_USE_STANDALONE_COMPILE:-0}"
+export ABM_TRUST_REMOTE_CODE="${ABM_TRUST_REMOTE_CODE:-1}"
+export ABM_LANGUAGE_MODEL_ONLY="${ABM_LANGUAGE_MODEL_ONLY:-0}"
+export ABM_TEXT_ONLY_MULTIMODAL="${ABM_TEXT_ONLY_MULTIMODAL:-1}"
 
 unset PYTHONPATH
 unset PYTHONUSERBASE
@@ -122,6 +126,10 @@ echo "Triton cache: $TRITON_CACHE_DIR"
 echo "HF offline: $HF_HUB_OFFLINE"
 echo "vLLM eager: $ABM_VLLM_ENFORCE_EAGER"
 echo "vLLM standalone compile: $VLLM_USE_STANDALONE_COMPILE"
+echo "trust_remote_code: $ABM_TRUST_REMOTE_CODE"
+echo "language_model_only: $ABM_LANGUAGE_MODEL_ONLY"
+echo "text_only_multimodal: $ABM_TEXT_ONLY_MULTIMODAL"
+echo "tensor_parallel_size: $TENSOR_PARALLEL_SIZE"
 
 cd "$PROJECT_ROOT"
 
@@ -143,6 +151,9 @@ if [[ "$CONTAINER_RUNTIME" == "apptainer" ]]; then
   export APPTAINERENV_PYTHONNOUSERSITE="$PYTHONNOUSERSITE"
   export APPTAINERENV_ABM_VLLM_ENFORCE_EAGER="$ABM_VLLM_ENFORCE_EAGER"
   export APPTAINERENV_VLLM_USE_STANDALONE_COMPILE="$VLLM_USE_STANDALONE_COMPILE"
+  export APPTAINERENV_ABM_TRUST_REMOTE_CODE="$ABM_TRUST_REMOTE_CODE"
+  export APPTAINERENV_ABM_LANGUAGE_MODEL_ONLY="$ABM_LANGUAGE_MODEL_ONLY"
+  export APPTAINERENV_ABM_TEXT_ONLY_MULTIMODAL="$ABM_TEXT_ONLY_MULTIMODAL"
   export APPTAINERENV_LD_LIBRARY_PATH="$CONTAINER_LD_LIBRARY_PATH"
   export APPTAINERENV_CC="/usr/bin/gcc"
   export APPTAINERENV_CXX="/usr/bin/g++"
@@ -162,6 +173,9 @@ else
   export SINGULARITYENV_PYTHONNOUSERSITE="$PYTHONNOUSERSITE"
   export SINGULARITYENV_ABM_VLLM_ENFORCE_EAGER="$ABM_VLLM_ENFORCE_EAGER"
   export SINGULARITYENV_VLLM_USE_STANDALONE_COMPILE="$VLLM_USE_STANDALONE_COMPILE"
+  export SINGULARITYENV_ABM_TRUST_REMOTE_CODE="$ABM_TRUST_REMOTE_CODE"
+  export SINGULARITYENV_ABM_LANGUAGE_MODEL_ONLY="$ABM_LANGUAGE_MODEL_ONLY"
+  export SINGULARITYENV_ABM_TEXT_ONLY_MULTIMODAL="$ABM_TEXT_ONLY_MULTIMODAL"
   export SINGULARITYENV_LD_LIBRARY_PATH="$CONTAINER_LD_LIBRARY_PATH"
   export SINGULARITYENV_CC="/usr/bin/gcc"
   export SINGULARITYENV_CXX="/usr/bin/g++"
@@ -187,6 +201,15 @@ ARGS=(
 
 if [[ "$ABM_VLLM_ENFORCE_EAGER" == "1" ]] || [[ "${ABM_VLLM_ENFORCE_EAGER,,}" == "true" ]]; then
   ARGS+=(--enforce-eager)
+fi
+if [[ "$ABM_TRUST_REMOTE_CODE" == "1" ]] || [[ "${ABM_TRUST_REMOTE_CODE,,}" == "true" ]]; then
+  ARGS+=(--trust-remote-code)
+fi
+if [[ "$ABM_LANGUAGE_MODEL_ONLY" == "1" ]] || [[ "${ABM_LANGUAGE_MODEL_ONLY,,}" == "true" ]]; then
+  ARGS+=(--language-model-only)
+fi
+if [[ "$ABM_TEXT_ONLY_MULTIMODAL" == "1" ]] || [[ "${ABM_TEXT_ONLY_MULTIMODAL,,}" == "true" ]]; then
+  ARGS+=(--text-only-multimodal)
 fi
 
 if [[ -n "$ARCHETYPES" ]]; then
