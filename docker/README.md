@@ -22,7 +22,7 @@ Model weights are not baked into the image.
 - Python runtime: `python3`
 - key runtime packages:
   - `torch==2.5.0` from the CUDA 12.1 wheel index
-  - `transformers==4.57.1`
+  - `transformers==5.5.0`
   - `accelerate==1.13.0`
 
 Historical filenames still mention `qwen`, but the current rollout target is Gemma 4.

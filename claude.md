@@ -70,7 +70,7 @@ spec/
 
 - current model target: `google/gemma-4-31B-it`
 - inference engine target: `Transformers + Accelerate`
-- transformers target in container: `4.57.1`
+- transformers target in container: `5.5.0`
 - torch target in container: `2.5.0` from the CUDA 12.1 wheel index
 - Gemma 4 Leonardo runs should default to `device_map=auto`
 - Gemma 4 Leonardo runs should default to `attn_implementation=sdpa`
