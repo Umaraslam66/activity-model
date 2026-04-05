@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
-from .prompting import build_chat_prompt
+from .prompting import build_chat_prompt, build_processor_messages
 from .schema import ACTIVITY_CHAIN_JSON_SCHEMA, REASON_TAGS, ZONE_CHOICES
 from .vllm_compat import patch_vllm_transformers_base_for_nullable_subconfigs, prepare_model_dir_for_vllm
 
@@ -17,6 +18,30 @@ class BackendResponse:
 class GenerationBackend(Protocol):
     def generate_batch(self, scenario_seeds: list[dict[str, Any]]) -> list[BackendResponse]:
         ...
+
+
+def _is_local_model_path(model: str) -> bool:
+    return Path(model).expanduser().exists()
+
+
+def _resolve_torch_dtype(dtype: str) -> Any:
+    import torch
+
+    mapping = {
+        "auto": "auto",
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+        "float32": torch.float32,
+    }
+    if dtype not in mapping:
+        raise ValueError(f"Unsupported dtype for transformers backend: {dtype}")
+    return mapping[dtype]
+
+
+def _model_input_device(model: Any) -> Any:
+    for parameter in model.parameters():
+        return parameter.device
+    raise RuntimeError("Could not determine a model input device.")
 
 
 class VllmBackend:
@@ -72,6 +97,107 @@ class VllmBackend:
         prompts = [build_chat_prompt(self._tokenizer, scenario_seed=seed) for seed in scenario_seeds]
         outputs = self._llm.generate(prompts, self._sampling)
         return [BackendResponse(raw_text=output.outputs[0].text.strip()) for output in outputs]
+
+
+class TransformersBackend:
+    def __init__(
+        self,
+        *,
+        model: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        max_model_len: int,
+        dtype: str,
+        seed: int,
+        trust_remote_code: bool,
+        device_map: str,
+        attn_implementation: str | None,
+    ) -> None:
+        import torch
+        from transformers import AutoModelForImageTextToText, AutoProcessor, set_seed  # type: ignore
+
+        local_files_only = _is_local_model_path(model)
+        processor_kwargs: dict[str, Any] = {
+            "trust_remote_code": trust_remote_code,
+            "local_files_only": local_files_only,
+        }
+        self._processor = AutoProcessor.from_pretrained(model, **processor_kwargs)
+        self._tokenizer = getattr(self._processor, "tokenizer", self._processor)
+        if getattr(self._tokenizer, "pad_token", None) is None and getattr(self._tokenizer, "eos_token", None) is not None:
+            self._tokenizer.pad_token = self._tokenizer.eos_token
+        if hasattr(self._tokenizer, "padding_side"):
+            self._tokenizer.padding_side = "left"
+
+        model_kwargs: dict[str, Any] = {
+            "torch_dtype": _resolve_torch_dtype(dtype),
+            "device_map": device_map,
+            "trust_remote_code": trust_remote_code,
+            "local_files_only": local_files_only,
+        }
+        if attn_implementation:
+            model_kwargs["attn_implementation"] = attn_implementation
+
+        self._model = AutoModelForImageTextToText.from_pretrained(model, **model_kwargs)
+        self._model.eval()
+        self._input_device = _model_input_device(self._model)
+        self._max_model_len = max_model_len
+        self._generation_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_tokens,
+            "use_cache": True,
+            "pad_token_id": getattr(self._tokenizer, "pad_token_id", None),
+            "eos_token_id": getattr(self._tokenizer, "eos_token_id", None),
+        }
+        if temperature > 0.0:
+            self._generation_kwargs["do_sample"] = True
+            self._generation_kwargs["temperature"] = temperature
+            self._generation_kwargs["top_p"] = top_p
+        else:
+            self._generation_kwargs["do_sample"] = False
+
+        set_seed(seed)
+
+    def generate_batch(self, scenario_seeds: list[dict[str, Any]]) -> list[BackendResponse]:
+        import torch
+
+        prompts: list[str] = []
+        for scenario_seed in scenario_seeds:
+            messages = build_processor_messages(scenario_seed)
+            try:
+                prompt = self._processor.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=False,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                prompt = self._processor.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=False,
+                )
+            prompts.append(prompt)
+
+        inputs = self._tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=self._max_model_len,
+        )
+        inputs = inputs.to(self._input_device)
+
+        with torch.inference_mode():
+            outputs = self._model.generate(**inputs, **self._generation_kwargs)
+
+        prompt_length = inputs["input_ids"].shape[1]
+        generated_tokens = outputs[:, prompt_length:]
+        decoded = self._tokenizer.batch_decode(
+            generated_tokens,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        return [BackendResponse(raw_text=text.strip()) for text in decoded]
 
 
 class MockBackend:

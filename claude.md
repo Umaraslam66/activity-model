@@ -18,12 +18,12 @@ The C++/CUDA simulator itself lives in a separate repository.
 As of `2026-04-05`:
 
 - local CPU smoke tests work
-- the CI container build path works
+- the CI container build path is now based on `Transformers + Accelerate`
 - Docker tar -> Leonardo sandbox conversion works
 - Leonardo GPU startup works
 - the previous Qwen3.5 path was stabilized on Leonardo
 - the current rollout target is Gemma 4
-- Leonardo should still use `enforce_eager=True` and `VLLM_USE_STANDALONE_COMPILE=0` until Gemma proves otherwise
+- the previous `vLLM` path was dropped for Gemma 4 because released Gemma 4 support moved onto a newer CUDA / PyTorch stack than Leonardo supports cleanly
 - the current blocker is no longer infrastructure
 - the current blocker is output quality / validation: the model is generating JSON, but records are being rejected by strict chronology / consistency checks
 
@@ -69,12 +69,12 @@ spec/
 ### Model / runtime
 
 - current model target: `google/gemma-4-31B-it`
-- inference engine target: `vLLM 0.18.1`
-- transformers target in container: `5.5.0`
-- torch version is determined by the resolved vLLM wheel at build time
-- Gemma 4 text-only runs should use `limit_mm_per_prompt={image:0,audio:0}`
-- Gemma 4 Leonardo runs should use `trust_remote_code=True`
-- Gemma 4 31B should default to `tensor_parallel_size=2`
+- inference engine target: `Transformers + Accelerate`
+- transformers target in container: `4.57.1`
+- torch target in container: `2.5.0` from the CUDA 12.1 wheel index
+- Gemma 4 Leonardo runs should default to `device_map=auto`
+- Gemma 4 Leonardo runs should default to `attn_implementation=sdpa`
+- Gemma 4 Leonardo runs should default to `trust_remote_code=False`
 
 ### Leonardo
 
@@ -153,12 +153,12 @@ The script sends requests to the OpenRouter chat completions API and supports `r
 
 Historical filenames still mention `qwen`, but the active Leonardo target is now Gemma 4.
 
-Official Gemma 4 / vLLM guidance implies:
+Official Gemma 4 / Transformers guidance implies:
 
 - `google/gemma-4-31B-it` is not a 1-GPU drop-in on Leonardo
-- on A100-class hardware, treat 31B as a 2-GPU tensor-parallel workload
-- for text-only workloads, disable image/audio allocation instead of assuming a plain text-only architecture
-- keep `enforce_eager=True` until Leonardo proves the compile path is stable
+- on Leonardo, use both A100s and let Accelerate shard the model with `device_map=auto`
+- use the local staged model path, not a remote model ID, on compute nodes
+- keep the container path simple: PyTorch + Transformers + Accelerate, not source-built `vLLM`
 
 ## Container Build
 
@@ -239,7 +239,7 @@ On Leonardo:
 ```bash
 export WORK=/leonardo_work/AIFAC_P02_222
 singularity exec ${WORK}/containers/bonzai-qwen-generator python3 --version
-singularity exec ${WORK}/containers/bonzai-qwen-generator python3 -c "import torch, transformers, vllm; print(torch.__version__); print(transformers.__version__); print(vllm.__version__)"
+singularity exec ${WORK}/containers/bonzai-qwen-generator python3 -c "import torch, transformers, accelerate; print(torch.__version__); print(transformers.__version__); print(accelerate.__version__)"
 ```
 
 ### 6. Stage model weights
@@ -322,11 +322,10 @@ The current Slurm wrapper intentionally uses:
 - persistent caches on `$FAST`
 - `HF_HUB_OFFLINE=1`
 - `TRANSFORMERS_OFFLINE=1`
-- `ABM_VLLM_ENFORCE_EAGER=1`
-- `VLLM_USE_STANDALONE_COMPILE=0`
-- `ABM_TRUST_REMOTE_CODE=1`
-- `ABM_TEXT_ONLY_MULTIMODAL=1`
-- `TENSOR_PARALLEL_SIZE=2`
+- `ABM_BACKEND=transformers`
+- `ABM_DEVICE_MAP=auto`
+- `ABM_ATTN_IMPLEMENTATION=sdpa`
+- `ABM_TRUST_REMOTE_CODE=0`
 
 Those settings reflect what has actually worked on Leonardo so far.
 
@@ -335,9 +334,9 @@ Those settings reflect what has actually worked on Leonardo so far.
 - the older Qwen3.5 Leonardo path was debugged end-to-end
 - Leonardo sandbox builds work from Docker tar archives
 - GPU startup works on Leonardo
-- vLLM can load supported models successfully on Leonardo
-- eager mode works; compile mode does not currently work on Leonardo for this stack
-- structured output schema issues caused by `uniqueItems` have been removed from the vLLM-facing schema
+- the Transformers + Accelerate container path works on Leonardo's CUDA 12.2 stack
+- the probe and generation scripts now target the staged local Gemma 4 path directly
+- CI can validate the container without rebuilding a source `vLLM` stack
 
 ## Current Blocker
 

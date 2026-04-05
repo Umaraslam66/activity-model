@@ -19,11 +19,22 @@ def build_user_prompt(scenario_seed: dict[str, Any]) -> str:
     )
 
 
-def build_chat_prompt(tokenizer: Any, *, scenario_seed: dict[str, Any]) -> str:
-    messages = [
+def build_chat_messages(scenario_seed: dict[str, Any]) -> list[dict[str, str]]:
+    return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": build_user_prompt(scenario_seed)},
     ]
+
+
+def build_processor_messages(scenario_seed: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT}]},
+        {"role": "user", "content": [{"type": "text", "text": build_user_prompt(scenario_seed)}]},
+    ]
+
+
+def build_chat_prompt(tokenizer: Any, *, scenario_seed: dict[str, Any]) -> str:
+    messages = build_chat_messages(scenario_seed)
     try:
         return tokenizer.apply_chat_template(
             messages,

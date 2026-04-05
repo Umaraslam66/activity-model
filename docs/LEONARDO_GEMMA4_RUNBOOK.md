@@ -5,19 +5,17 @@ Validated against repo state and official docs on `2026-04-05`.
 This project is not a public inference API deployment. It is an offline synthetic-data generator for Bonzai's activity-based mobility model. The target workload is:
 
 - model: `google/gemma-4-31B-it`
-- runtime: `vLLM`
+- runtime: `Transformers + Accelerate`
 - cluster: CINECA Leonardo
 - GPUs: `2x A100 64 GB`
 - output: validated activity-chain JSONL shards
 
 ## Official References
 
-- vLLM Gemma 4 recipe:
-  - <https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html>
-- vLLM GPU install docs:
-  - <https://docs.vllm.ai/en/latest/getting_started/installation/gpu/>
 - Google Gemma Hugging Face docs:
   - <https://ai.google.dev/gemma/docs/core/huggingface_inference>
+- Hugging Face Gemma docs:
+  - <https://huggingface.co/docs/transformers/model_doc/gemma>
 - CINECA Singularity / Apptainer docs:
   - <https://docs.hpc.cineca.it/services/singularity.html>
 - CINECA access docs:
@@ -46,21 +44,20 @@ Do not treat `.sif` creation as the default path for this repo. The standardized
 
 These are the current intended Gemma 4 Leonardo settings:
 
-- `tensor_parallel_size=2`
 - `--gres=gpu:2`
-- `trust_remote_code=True`
-- `enforce_eager=True`
-- `VLLM_USE_STANDALONE_COMPILE=0`
-- `limit_mm_per_prompt={image:0,audio:0}` for text-only generation
+- `device_map=auto`
+- `attn_implementation=sdpa`
+- `dtype=bfloat16`
+- `trust_remote_code=False` by default
 - `HF_HUB_OFFLINE=1` on compute nodes
 - `TRANSFORMERS_OFFLINE=1` on compute nodes
 
 Why:
 
-- vLLM's Gemma 4 recipe explicitly shows `google/gemma-4-31B-it` with TP2 for `2x A100/H100`.
-- The same recipe recommends disabling multimodal allocation for text-only runs.
+- Google documents Gemma inference through the Hugging Face Transformers path.
+- Leonardo exposes `2x A100 64 GB`, which is enough to shard `gemma-4-31B-it` with `device_map=auto`.
 - CINECA docs confirm Leonardo uses A100 64 GB GPUs, CUDA 12.2, and container GPU runs should use `--nv`.
-- Your repo's Leonardo scripts already encode the stable path as eager mode plus offline caches.
+- The previous `vLLM` path required a newer released CUDA / PyTorch stack than Leonardo can support cleanly.
 
 ## CI/CD Shape
 
@@ -150,7 +147,7 @@ Quick container checks:
 ```bash
 singularity exec ${WORK}/containers/bonzai-qwen-generator python3 --version
 singularity exec ${WORK}/containers/bonzai-qwen-generator cat /etc/bonzai-build-manifest.txt
-singularity exec ${WORK}/containers/bonzai-qwen-generator python3 -c "import torch, transformers, vllm; print(torch.__version__); print(transformers.__version__); print(vllm.__version__)"
+singularity exec ${WORK}/containers/bonzai-qwen-generator python3 -c "import torch, transformers, accelerate; print(torch.__version__); print(transformers.__version__); print(accelerate.__version__)"
 ```
 
 ## Step 5: Stage Gemma 4 Weights on Leonardo
@@ -199,8 +196,7 @@ Expected probe properties:
 
 - 2 GPUs visible
 - local staged model path is used
-- `trust_remote_code` is enabled
-- text-only multimodal allocation is disabled
+- the Transformers model loads with `device_map=auto`
 - a short generation returns a valid text response
 
 Monitor:
@@ -236,7 +232,7 @@ mkdir -p ${OUTPUT_ROOT}
 cd ${PROJECT_ROOT}
 
 sbatch \
-  --export=ALL,PROJECT_ROOT=${PROJECT_ROOT},CONTAINER_IMAGE=${CONTAINER_IMAGE},ABM_LLM_MODEL=${ABM_LLM_MODEL},OUTPUT_ROOT=${OUTPUT_ROOT},TOTAL_RECORDS=100,NUM_SHARDS=1,SHARD_ID=0,BATCH_SIZE=4,MAX_TOKENS=2200,MAX_MODEL_LEN=8192,TENSOR_PARALLEL_SIZE=2 \
+  --export=ALL,PROJECT_ROOT=${PROJECT_ROOT},CONTAINER_IMAGE=${CONTAINER_IMAGE},ABM_LLM_MODEL=${ABM_LLM_MODEL},OUTPUT_ROOT=${OUTPUT_ROOT},TOTAL_RECORDS=100,NUM_SHARDS=1,SHARD_ID=0,BATCH_SIZE=1,MAX_TOKENS=2200,MAX_MODEL_LEN=8192,DEVICE_MAP=auto,ATTN_IMPLEMENTATION=sdpa \
   scripts/cineca/activity_chain_generate_leonardo.sbatch
 ```
 
@@ -309,7 +305,7 @@ Project success is stricter:
 Check:
 
 - workflow logs for the container build step
-- whether the failure is in CUDA base image pull, PyTorch install, vLLM build, or the smoke test
+- whether the failure is in CUDA base image pull, PyTorch install, Transformers install, or the smoke test
 - whether a dependency drifted upstream
 
 First local reproduction:
@@ -326,9 +322,9 @@ Check:
 - `nvidia-smi -L` in the probe logs
 - local model path exists
 - `HF_HUB_OFFLINE=1` does not hide a missing model download
-- `trust_remote_code` is still enabled
-- `TENSOR_PARALLEL_SIZE=2`
-- `VLLM_USE_STANDALONE_COMPILE=0`
+- `device_map=auto`
+- `dtype=bfloat16`
+- `attn_implementation=sdpa`
 
 ### Generation runs but all records are rejected
 

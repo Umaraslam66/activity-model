@@ -1,14 +1,9 @@
 FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 
-ARG VLLM_REF=v0.18.1
-ARG MAX_JOBS=8
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 ARG TORCH_VERSION=2.5.0
 ARG TORCHVISION_VERSION=0.20.0
 ARG TORCHAUDIO_VERSION=2.5.0
-ARG TRANSFORMERS_VERSION=5.5.0
-ARG HUGGINGFACE_HUB_VERSION=1.7.2
-ARG ACCELERATE_VERSION=1.13.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -16,37 +11,23 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HF_HOME=/cache/huggingface \
     HUGGINGFACE_HUB_CACHE=/cache/huggingface \
     TRANSFORMERS_CACHE=/cache/huggingface \
-    VLLM_CACHE_ROOT=/cache/vllm \
     PROJECT_ROOT=/workspace \
     OUTPUT_ROOT=/workspace/data/container-smoke \
     TOKENIZERS_PARALLELISM=false \
-    CUDA_HOME=/usr/local/cuda \
-    MAX_JOBS=${MAX_JOBS}
+    CUDA_HOME=/usr/local/cuda
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       python3 \
       python3-pip \
-      python3-venv \
-      python3-dev \
-      git \
-      ccache \
-      cmake \
-      gcc \
-      g++ \
-      libnuma-dev \
-      ninja-build && \
-    rm -rf /var/lib/apt/lists/* && \
-    ln -s /usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so \
-          /usr/lib/x86_64-linux-gnu/libcuda.so.1
+      python3-venv && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
 COPY requirements_inference.txt requirements_smoke.txt ./
 
-# Install a CUDA-compatible PyTorch first, then build vLLM from source using
-# the documented "existing PyTorch installation" flow.
-RUN python3 -m pip install --upgrade pip setuptools wheel uv
+RUN python3 -m pip install --upgrade pip setuptools wheel
 
 RUN python3 -m pip install \
     --index-url "${TORCH_INDEX_URL}" \
@@ -54,24 +35,11 @@ RUN python3 -m pip install \
     "torchvision==${TORCHVISION_VERSION}" \
     "torchaudio==${TORCHAUDIO_VERSION}"
 
-RUN git clone --depth 1 --branch "${VLLM_REF}" https://github.com/vllm-project/vllm.git /tmp/vllm
+RUN python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt
 
-RUN cd /tmp/vllm && \
-    python3 use_existing_torch.py && \
-    uv pip install --system -r requirements/build.txt && \
-    uv pip install --system --no-build-isolation .
+RUN python3 -c "from transformers import AutoProcessor, Gemma4ForConditionalGeneration; print(AutoProcessor.__name__); print(Gemma4ForConditionalGeneration.__name__); print('gemma4_transformers_impl_ok')"
 
-RUN python3 -m pip install -r requirements_inference.txt -r requirements_smoke.txt && \
-    python3 -m pip install --no-deps \
-      "transformers==${TRANSFORMERS_VERSION}" \
-      "huggingface_hub==${HUGGINGFACE_HUB_VERSION}" \
-      "accelerate==${ACCELERATE_VERSION}"
-
-RUN python3 -c "from importlib import import_module; module = import_module('vllm.model_executor.models.gemma4'); assert hasattr(module, 'Gemma4ForConditionalGeneration'), 'Gemma4 vLLM implementation missing'; print('gemma4_vllm_impl_ok')"
-
-RUN python3 -c "import sys, torch, transformers, vllm; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'vllm={vllm.__version__}'); print('vllm_ref=${VLLM_REF}'); print('torch_index_url=${TORCH_INDEX_URL}')" > /etc/bonzai-build-manifest.txt
-
-RUN rm -rf /tmp/vllm
+RUN python3 -c "import sys, accelerate, torch, transformers; print(f'python={sys.version.split()[0]}'); print(f'torch={torch.__version__}'); print(f'transformers={transformers.__version__}'); print(f'accelerate={accelerate.__version__}'); print('torch_index_url=${TORCH_INDEX_URL}')" > /etc/bonzai-build-manifest.txt
 
 COPY . /workspace
 

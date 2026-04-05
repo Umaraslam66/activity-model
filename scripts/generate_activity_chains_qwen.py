@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from activity_chain.backends import MockBackend, VllmBackend
+from activity_chain.backends import MockBackend, TransformersBackend, VllmBackend
 from activity_chain.runner import RunConfig, run_generation
 
 
@@ -30,8 +30,12 @@ def _env_flag(name: str, *, default: bool) -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate activity_chain_v1 synthetic data.")
-    parser.add_argument("--backend", choices=["vllm", "mock"], default=os.environ.get("ABM_BACKEND", "vllm"))
-    parser.add_argument("--model", default=os.environ.get("ABM_LLM_MODEL", ""), help="Model path or Hugging Face id for vLLM runs.")
+    parser.add_argument(
+        "--backend",
+        choices=["transformers", "vllm", "mock"],
+        default=os.environ.get("ABM_BACKEND", "transformers"),
+    )
+    parser.add_argument("--model", default=os.environ.get("ABM_LLM_MODEL", ""), help="Model path or Hugging Face id for real-model runs.")
     parser.add_argument("--output", default=_default_output_path())
     parser.add_argument("--total", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -43,6 +47,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--dtype", default="bfloat16")
     parser.add_argument(
+        "--device-map",
+        default=os.environ.get("ABM_DEVICE_MAP", "auto"),
+        help="Transformers backend device map. Use auto on Leonardo for Gemma 4 31B.",
+    )
+    parser.add_argument(
+        "--attn-implementation",
+        default=os.environ.get("ABM_ATTN_IMPLEMENTATION", "sdpa"),
+        help="Transformers attention implementation.",
+    )
+    parser.add_argument(
         "--enforce-eager",
         action="store_true",
         default=_env_flag("ABM_VLLM_ENFORCE_EAGER", default=False),
@@ -52,19 +66,19 @@ def parse_args() -> argparse.Namespace:
         "--trust-remote-code",
         action="store_true",
         default=_env_flag("ABM_TRUST_REMOTE_CODE", default=False),
-        help="Enable trust_remote_code when loading tokenizer/model via vLLM.",
+        help="Enable trust_remote_code when loading the model via Transformers or vLLM.",
     )
     parser.add_argument(
         "--language-model-only",
         action="store_true",
         default=_env_flag("ABM_LANGUAGE_MODEL_ONLY", default=False),
-        help="Use vLLM language_model_only=True for multimodal checkpoints with pure-text execution.",
+        help="Legacy vLLM-only option for multimodal checkpoints with pure-text execution.",
     )
     parser.add_argument(
         "--text-only-multimodal",
         action="store_true",
         default=_env_flag("ABM_TEXT_ONLY_MULTIMODAL", default=False),
-        help="Disable image/audio allocation for multimodal checkpoints during text-only runs.",
+        help="Legacy vLLM-only option to disable image/audio allocation during text-only runs.",
     )
     parser.add_argument("--commit-every", type=int, default=100)
     parser.add_argument("--shard-id", type=int, default=0)
@@ -83,8 +97,8 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
 
-    if args.backend == "vllm" and not args.model:
-        raise ValueError("--model is required when --backend=vllm. Set ABM_LLM_MODEL or pass --model explicitly.")
+    if args.backend in {"transformers", "vllm"} and not args.model:
+        raise ValueError("--model is required when using a real model backend. Set ABM_LLM_MODEL or pass --model explicitly.")
     if args.total <= 0:
         raise ValueError("--total must be > 0")
     if args.batch_size <= 0:
@@ -116,6 +130,19 @@ def main() -> None:
 
     if args.backend == "mock":
         backend = MockBackend(invalid_every=args.mock_invalid_every)
+    elif args.backend == "transformers":
+        backend = TransformersBackend(
+            model=args.model,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            max_tokens=args.max_tokens,
+            max_model_len=args.max_model_len,
+            dtype=args.dtype,
+            seed=args.seed,
+            trust_remote_code=args.trust_remote_code,
+            device_map=args.device_map,
+            attn_implementation=args.attn_implementation,
+        )
     else:
         backend = VllmBackend(
             model=args.model,

@@ -21,13 +21,15 @@ Model weights are not baked into the image.
 - base image: `nvidia/cuda:12.2.2-devel-ubuntu22.04`
 - Python runtime: `python3`
 - key runtime packages:
-  - `vLLM` built from source with default ref `v0.18.1`
-  - `transformers==5.5.0`
-  - `huggingface_hub==1.7.2`
+  - `torch==2.5.0` from the CUDA 12.1 wheel index
+  - `transformers==4.57.1`
+  - `accelerate==1.13.0`
 
 Historical filenames still mention `qwen`, but the current rollout target is Gemma 4.
 
 The image is intentionally dependency-focused. The repository code is copied into the image, but model weights and cluster caches live outside the image.
+
+For Gemma 4 on Leonardo, the repo now uses the `Transformers + Accelerate` path instead of `vLLM`. The `vLLM` path drifted onto a newer CUDA / PyTorch stack than Leonardo can support cleanly.
 
 ## CI Build
 
@@ -53,16 +55,6 @@ Optional local build:
 
 ```bash
 docker build --platform linux/amd64 -f docker/Dockerfile.qwen-generator -t bonzai/qwen-generator:local .
-```
-
-To test a different vLLM tag or commit:
-
-```bash
-docker build \
-  --platform linux/amd64 \
-  --build-arg VLLM_REF=<tag-or-commit> \
-  -f docker/Dockerfile.qwen-generator \
-  -t bonzai/qwen-generator:local .
 ```
 
 ## Local Smoke Test

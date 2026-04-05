@@ -9,7 +9,7 @@ Before doing any work, read these files:
 3. **`/SAT/docker/README.md`** — container build and transfer workflow
 4. **`/SAT/scripts/cineca/activity_chain_generate_leonardo.sbatch`** — main Leonardo generation job
 5. **`/SAT/scripts/cineca/activity_chain_probe_leonardo.sbatch`** — Leonardo probe job
-6. **`/SAT/activity_chain/backends.py`** — vLLM backend setup
+6. **`/SAT/activity_chain/backends.py`** — generation backend setup
 7. **`/SAT/activity_chain/schema.py`** — output schema
 8. **`/SAT/activity_chain/validation.py`** — post-generation validation
 9. **`/SAT/requirements_inference.txt`** — runtime dependencies
@@ -35,11 +35,11 @@ Current phase:
 - Leonardo GPU startup
 - the previous Qwen3.5 runtime was stabilized
 - the current target is Gemma 4
-- vLLM on Leonardo when run with:
-  - `trust_remote_code=True`
-  - `limit_mm_per_prompt={image:0,audio:0}`
-  - `enforce_eager=True`
-  - `VLLM_USE_STANDALONE_COMPILE=0`
+- Transformers + Accelerate on Leonardo when run with:
+  - `device_map=auto`
+  - `attn_implementation=sdpa`
+  - `dtype=bfloat16`
+  - the local staged model path
 
 ### Current blocker
 
@@ -57,7 +57,7 @@ The current blocker is **generation quality / validation**:
 - use the local staged model path, not a Hugging Face model ID
 - use `singularity build --sandbox`, not `.sif`
 - keep `--cleanenv --nv`
-- Gemma 4 31B should be treated as a 2-GPU tensor-parallel deployment on Leonardo
+- Gemma 4 31B should be treated as a 2-GPU deployment on Leonardo
 - use manual commands over wrapper scripts if reliability matters
 
 ## Success Criteria
@@ -74,8 +74,8 @@ Success means:
 If more investigation is needed, prioritize:
 
 - official CINECA Leonardo / Singularity docs
-- official vLLM docs
+- official Hugging Face Transformers docs
 - official Gemma 4 model card
-- actual vLLM source code when runtime behavior is unclear
+- actual Transformers model implementation when runtime behavior is unclear
 
 Do not treat old failed paths as the source of truth. The surviving source of truth is `claude.md` plus the current runtime files in `scripts/` and `activity_chain/`.

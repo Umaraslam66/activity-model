@@ -1,6 +1,9 @@
-# Runtime dependencies for real Leonardo generation.
+# Runtime dependencies for real Leonardo generation on Leonardo.
 #
-# vLLM is built from source in the Dockerfile to match Leonardo's environment.
+# Gemma 4 uses the Transformers + Accelerate path rather than vLLM.
 
-jsonschema==4.26.0
+accelerate==1.13.0
 hf_transfer==0.1.9
+jsonschema==4.26.0
+sentencepiece>=0.2.0
+transformers==4.57.1
